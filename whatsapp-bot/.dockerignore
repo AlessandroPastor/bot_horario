@@ -1,0 +1,13 @@
+node_modules
+dist
+auth_info
+data
+backups
+logs
+.env
+*.log
+.git
+.gitignore
+README.md
+scripts
+ecosystem.config.cjs

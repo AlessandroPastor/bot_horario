@@ -1,0 +1,12 @@
+services:
+  whatsapp-bot:
+    build: .
+    container_name: whatsapp-bot
+    restart: unless-stopped
+    env_file:
+      - path: ./.env
+        required: false
+    volumes:
+      - ./auth_info:/app/auth_info
+      - ./data:/app/data
+      - ./backups:/app/backups
