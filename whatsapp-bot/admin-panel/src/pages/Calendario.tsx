@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { ActionIcon, Button, Group, Modal, Stack, Table, Text, TextInput, Title } from "@mantine/core";
+import { DateInput } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { calendarioApi, type DatosFecha } from "../api/calendarioCivico";
 import type { FechaCivica } from "../api/tipos";
-
-const FECHA_VALIDA = /^\d{4}-\d{2}-\d{2}$/;
+import { fechaAISO, isoAFecha } from "../utils/fecha";
 
 export function CalendarioPage() {
   const qc = useQueryClient();
@@ -19,7 +19,7 @@ export function CalendarioPage() {
     initialValues: { titulo: "", fecha: "" },
     validate: {
       titulo: (v) => (v.trim() ? null : "Obligatorio"),
-      fecha: (v) => (FECHA_VALIDA.test(v) ? null : "Formato AAAA-MM-DD"),
+      fecha: (v) => (v ? null : "Elige una fecha"),
     },
   });
 
@@ -122,7 +122,16 @@ export function CalendarioPage() {
         <form onSubmit={form.onSubmit(guardar)}>
           <Stack>
             <TextInput label="Título" required {...form.getInputProps("titulo")} />
-            <TextInput label="Fecha (AAAA-MM-DD)" required placeholder="2026-08-30" {...form.getInputProps("fecha")} />
+            <DateInput
+              label="Fecha"
+              required
+              placeholder="Elige una fecha"
+              valueFormat="D [de] MMMM [de] YYYY"
+              clearable
+              value={isoAFecha(form.values.fecha)}
+              onChange={(v) => form.setFieldValue("fecha", fechaAISO(v))}
+              error={form.errors.fecha}
+            />
             <Button type="submit" loading={crear.isPending || actualizar.isPending}>
               Guardar
             </Button>

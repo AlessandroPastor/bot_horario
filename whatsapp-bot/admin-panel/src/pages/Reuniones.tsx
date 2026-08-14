@@ -12,14 +12,15 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
+import { DateInput } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { reunionesApi, type DatosReunion } from "../api/reuniones";
 import { GRADOS, SECCIONES, type Reunion } from "../api/tipos";
+import { fechaAISO, isoAFecha } from "../utils/fecha";
 
-const FECHA_VALIDA = /^\d{4}-\d{2}-\d{2}$/;
 const HORA_VALIDA = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 interface ValoresFormulario {
@@ -58,7 +59,7 @@ export function ReunionesPage() {
     initialValues: VALORES_INICIALES,
     validate: {
       titulo: (v) => (v.trim() ? null : "Obligatorio"),
-      fecha: (v) => (FECHA_VALIDA.test(v) ? null : "Formato AAAA-MM-DD"),
+      fecha: (v) => (v ? null : "Elige una fecha"),
       hora: (v) => (HORA_VALIDA.test(v) ? null : "Formato HH:mm"),
     },
   });
@@ -193,7 +194,16 @@ export function ReunionesPage() {
           <Stack>
             <TextInput label="Título" required placeholder="Reunión de padres — 1er bimestre" {...form.getInputProps("titulo")} />
             <Group grow>
-              <TextInput label="Fecha (AAAA-MM-DD)" required placeholder="2026-09-10" {...form.getInputProps("fecha")} />
+              <DateInput
+                label="Fecha"
+                required
+                placeholder="Elige una fecha"
+                valueFormat="D [de] MMMM [de] YYYY"
+                clearable
+                value={isoAFecha(form.values.fecha)}
+                onChange={(v) => form.setFieldValue("fecha", fechaAISO(v))}
+                error={form.errors.fecha}
+              />
               <TextInput label="Hora (HH:mm)" required placeholder="18:00" {...form.getInputProps("hora")} />
             </Group>
             <TextInput label="Lugar (opcional)" placeholder="Auditorio, Aula 302..." {...form.getInputProps("lugar")} />
