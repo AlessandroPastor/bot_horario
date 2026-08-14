@@ -82,15 +82,61 @@ export function obtenerEstadoConexion(): { conectado: boolean } {
 }
 
 /**
+ * useMultiFileAuthState todavía puede tener una escritura de creds.json en
+ * curso (por el último creds.update) justo cuando llega el logout, lo que
+ * deja el directorio "busy" un instante. El error que tira Node en ese caso
+ * (sobre todo con el bind mount de Docker) no siempre trae `err.code`
+ * poblado (a veces llega vacío), así que el `maxRetries` propio de
+ * fs.rmSync —que compara por código— no alcanza a engancharlo. Reintentamos
+ * a mano, sin filtrar por código, dándole tiempo a que la escritura pendiente
+ * termine sola.
+ */
+async function borrarDirectorioConReintentos(
+  ruta: string,
+  intentos = 6,
+  esperaMs = 300,
+): Promise<void> {
+  for (let intento = 1; intento <= intentos; intento++) {
+    try {
+      fs.rmSync(ruta, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      if (intento === intentos) throw err;
+      await new Promise((resolve) => setTimeout(resolve, esperaMs));
+    }
+  }
+}
+
+/**
  * Borra la sesión guardada (auth_info/ + el qr.png viejo, que ya no sirve)
  * y arranca una reconexión desde cero — eso hace que Baileys pida un QR
  * nuevo enseguida, sin tener que reiniciar el contenedor a mano.
+ *
+ * La reconexión se intenta SIEMPRE, incluso si el borrado termina fallando
+ * después de todos los reintentos — de lo contrario un solo borrado fallido
+ * deja el bot desconectado para siempre (nadie vuelve a llamar startBot) y
+ * hay que reiniciar el contenedor a mano para recuperarlo. Si el borrado no
+ * se pudo completar, useMultiFileAuthState va a releer la sesión vieja (ya
+ * invalidada por el logout), lo que dispara otro cierre casi inmediato y
+ * este mismo flujo se repite — para entonces el archivo ya no está ocupado y
+ * el segundo intento de borrado se completa solo.
  */
 async function limpiarSesionYReconectar(): Promise<void> {
   conectado = false;
-  fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+  try {
+    await borrarDirectorioConReintentos(AUTH_DIR);
+  } catch (err) {
+    console.error(
+      "No se pudo borrar auth_info tras varios intentos; igual se intenta reconectar:",
+      err,
+    );
+  }
   fs.mkdirSync(AUTH_DIR, { recursive: true });
-  if (fs.existsSync(QR_PATH)) fs.rmSync(QR_PATH, { force: true });
+  try {
+    if (fs.existsSync(QR_PATH)) fs.rmSync(QR_PATH, { force: true });
+  } catch (err) {
+    console.error("No se pudo borrar el qr.png viejo:", err);
+  }
   if (handlersActuales) {
     startBot(handlersActuales).catch((err) =>
       console.error("Error al reconectar tras desvincular:", err),
