@@ -63,6 +63,8 @@ Una vez vinculado, escríbele estos comandos desde WhatsApp:
 - `!borrar <id>` — elimina un horario.
 - `!exportar` — te manda un archivo `.json` con todos tus horarios (respaldo manual).
 - `!importar` — respóndele (reply) a ese `.json` con este comando para recuperar los horarios ahí guardados.
+- `!reunion` — ver las próximas reuniones de padres que te tocan (según tu grado/sección). Crear, editar y borrar reuniones también se puede hacer por WhatsApp, pero solo desde el chat administrador — ver "Reuniones de padres de familia" más abajo.
+- `!otrosalon` — ver el horario de OTRO grado/sección (no el tuyo). Te pregunta grado y sección, y te muestra ese horario sin tocar tu propio registro. También funciona en lenguaje natural: "el horario de otro salón", "otra sección", "otro grado". Cualquier chat puede usarlo, incluso sin haberse registrado todavía.
 - `!ayuda` — lista de comandos.
 
 > No hay comando para *crear* horarios desde el chat (ya no existe `!agregar`). Los horarios (clases por grado/sección y calendario cívico) se manejan internamente — ver `src/db/seed.ts` — no por los alumnos vía WhatsApp. `!importar` sigue disponible para restaurar un `.json` exportado previamente.
@@ -122,7 +124,10 @@ El mensaje de recordatorio ya no repite el minutaje que configuraste al crear el
 
 ```
 ⏰ Recordatorio: *Matemática* empieza en 1 hora y 35 minutos (10:15).
+_3°B de Secundaria — Aula 302 — Prof. Pérez_
 ```
+
+El aviso también incluye el aula/docente (o el lugar, si es una reunión de padres) cuando ese dato existe — no solo el título y la hora.
 
 Y si el bot estuvo apagado o desconectado varias horas (por ejemplo, lo prendiste recién a las 3:24 p.m. y tenías una clase a las 8:00 a.m.), **ya no manda avisos "de mentira"** de clases que pasaron hace rato — los marca como atendidos en silencio y sigue con el día normal. Solo avisa si el momento de avisar fue hace menos de 10 minutos; más allá de eso, ya no tiene sentido interrumpirte con algo viejo.
 
@@ -132,11 +137,61 @@ El bot se presenta como **Ceneciano**, el asistente del **Colegio Nacional de Ca
 
 1. Se presenta y pide el grado: *"👋 ¡Hola! Soy Ceneciano, tu asistente del Colegio Nacional de Cabanillas (Puno). Para mostrarte tu horario, cuéntame: ¿de qué grado eres?"* — espera un número del **1 al 5** (1° a 5° de secundaria).
 2. Luego pide la sección: una letra de la **A a la E**.
-3. Con grado y sección completos (ej. *3°B*), crea automáticamente el horario semanal de ESA sección (Matemática, Comunicación, Inglés, Ciencia y Tecnología, Ciencias Sociales, DPCC, Educación Física, Arte y Cultura, Educación para el Trabajo, Religión y Tutoría — de lunes a viernes), en su propia aula (101-105 para 1°, 201-205 para 2°, ... 501-505 para 5°, una por cada combinación grado+sección).
-4. También agrega, una sola vez por chat, las fechas del calendario cívico oficial del Perú (Santa Rosa de Lima, Combate de Angamos, Todos los Santos, etc.) como eventos puntuales — esas sí son iguales para todas las secciones, no dependen de la respuesta.
+3. Con grado y sección completos (ej. *3°B*), crea automáticamente el horario semanal de ESA sección (por defecto: Matemática, Comunicación, Inglés, Ciencia y Tecnología, Ciencias Sociales, DPCC, Educación Física, Arte y Cultura, Educación para el Trabajo, Religión y Tutoría — de lunes a viernes), en su propia aula (101-105 para 1°, 201-205 para 2°, ... 501-505 para 5°, una por cada combinación grado+sección). Este contenido ahora es **editable desde el panel de administrador** (ver más abajo) — lo de arriba es solo el punto de partida por defecto.
+4. También agrega, una sola vez por chat, las fechas del calendario cívico (por defecto, el oficial del Perú: Santa Rosa de Lima, Combate de Angamos, Todos los Santos, etc.) como eventos puntuales — esas sí son iguales para todas las secciones, no dependen de la respuesta, y también son editables desde el panel.
 5. El grado y la sección quedan guardados (tabla `perfiles`), así que la próxima vez que preguntes por tu horario ya no te lo vuelve a preguntar.
 
 Es solo un punto de partida para no arrancar en blanco — son horarios normales, así que se pueden pausar o borrar con `!listar` + `!borrar <id>` como cualquier otro.
+
+## Panel de administrador (docentes, cursos, horarios, calendario)
+
+Para no tener que editar código cada vez que cambia algo, hay un panel web donde se administra:
+
+- **Docentes** — nombre, el grado que dicta (1°-5°, obligatorio) y materia/área y contacto opcionales, para vincular a cada curso/clase (aparece como "Matemática — Prof. Pérez" en los horarios que recibe cada alumno). El grado también sirve de filtro: al elegir el docente de un curso u horario, solo se muestran los de ese grado (útil apenas hay varias decenas de docentes).
+- **Cursos** — el catálogo de materias de cada grado (ver "Cursos por grado y generación automática de horario" más abajo): la forma recomendada de armar el horario.
+- **Horarios por grado y sección** — el currículo real, clase por clase: para cada combinación de grado (1°-5°) y sección (A-E), qué clases hay, a qué hora, qué días, con qué docente y cuántos minutos antes avisar. Se llena solo si generas el horario desde "Cursos", pero también se puede editar clase por clase a mano acá (por ejemplo para ajustar algo puntual después de generar). Como hay 25 combinaciones casi idénticas, también se puede **clonar** el horario de una sección a otra en un clic.
+- **Calendario cívico** — las fechas puntuales (feriados, aniversarios) que se le avisan a todo el mundo.
+
+**Importante:** esto edita la *plantilla* — lo que le toca a cualquier alumno que se registre (o vuelva a registrarse) de ahí en adelante. No modifica retroactivamente los horarios que un chat ya tiene guardados; para eso siguen estando `!pausar`/`!borrar` desde WhatsApp.
+
+### Cursos por grado y generación automática de horario
+
+La forma recomendada de armar el horario no es escribir clase por clase — es en dos pasos:
+
+1. **Define los cursos de cada grado** (pestaña "Cursos"): elige el grado, y por cada materia indica su nombre, qué docente la dicta y cuántas veces por semana se dicta. **El mismo docente dicta esa materia en las 5 secciones (A-E)** de ese grado, cada una en un horario distinto — no hace falta (ni se puede) elegir un docente diferente por sección.
+2. Cuando termines de cargar los cursos de un grado, dale a **"Generar horario"**. El panel arma automáticamente el horario de las 5 secciones, eligiendo día(s) y hora al azar entre los bloques disponibles, cuidando dos cosas: dentro de una misma sección nunca hay dos clases a la vez, y el mismo docente nunca queda "en dos secciones a la misma hora" (como reparte su semana entre las 5, el generador evita que se crucen sus propios horarios).
+
+Si algún curso pide más sesiones de las que caben sin cruzarse (por ejemplo, un docente con demasiadas materias/secciones a cargo), el panel te avisa exactamente cuáles no se pudieron ubicar completas, en vez de forzar un cruce o fallar en silencio — puedes ajustar la carga (menos veces por semana, otro docente) y volver a generar.
+
+> Generar horario **reemplaza por completo** el horario actual de las 5 secciones de ese grado (lo borra y arma uno nuevo) — no lo combina con clases que hayas agregado a mano ahí. Si ya ajustaste algo manualmente en "Horarios" para ese grado, generar de nuevo lo pierde. Puedes seguir afinando resultados puntuales a mano en "Horarios" después de generar, siempre que no vuelvas a generar ese grado.
+
+### Cómo activarlo
+
+Por defecto el panel **no arranca** — hace falta configurar 3 variables en `.env` (copia `.env.example` si no lo tienes):
+
+```
+ADMIN_USER=tu_usuario
+ADMIN_PASSWORD=una_contraseña_segura
+ADMIN_SESSION_SECRET=cualquier_texto_largo_y_random
+```
+
+Sin esas 3, el bot de WhatsApp funciona exactamente igual — solo el panel queda apagado (verás una advertencia en los logs recordándotelo). Con ellas configuradas y el bot corriendo (con o sin Docker), entra desde el navegador a `http://localhost:4500` (o la IP de esa PC en tu red si entras desde otro dispositivo) e inicia sesión con ese usuario/contraseña.
+
+> Pensado **solo para tu red local** — no hay HTTPS ni multiusuario. No expongas ese puerto a Internet (si usas Docker, revisa `docker-compose.yml`: el puerto se expone en todas las interfaces por defecto).
+
+## Reuniones de padres de familia
+
+A diferencia de horarios/calendario (que solo se editan desde el panel), las reuniones de padres tienen **CRUD completo tanto desde el panel como desde WhatsApp**:
+
+- **Desde el panel** (pestaña "Reuniones de padres"): título, fecha, hora, lugar opcional, para qué grado/sección (o "todos"), y minutos de aviso previo.
+- **Desde WhatsApp**, con `!reunion`:
+  - Sin nada más (`!reunion`) — cualquier chat registrado ve sus próximas reuniones, según su propio grado/sección.
+  - `!reunion agregar` / `!reunion editar <id>` — inicia un wizard paso a paso (grado → sección → título → fecha → hora → lugar → minutos de aviso; escribe `cancelar` para salir). **Solo funciona desde el chat configurado en `OWNER_CHAT_ID`** (ver abajo) — cualquier otro chat recibe un aviso de que ese comando es solo para el administrador.
+  - `!reunion borrar <id>` / `!reunion listar` — también solo desde ese chat admin.
+
+En cuanto se crea o edita una reunión (desde donde sea), se avisa **de inmediato** — como un recordatorio más de WhatsApp — a todos los chats ya registrados que calcen con el grado/sección elegidos. Borrar una reunión borra también esos recordatorios ya repartidos.
+
+> Para poder usar `!reunion agregar/editar/borrar/listar` desde WhatsApp hace falta tener `OWNER_CHAT_ID` configurado en `.env` (ver sección de abajo) — es el mismo chat que ya se usa para avisos del sistema (reconexión, etc.), reutilizado aquí como "el chat del administrador". Sin esa variable, esos 4 subcomandos quedan inaccesibles por chat (pero siguen disponibles desde el panel), y `!reunion` sin nada más sigue funcionando para cualquiera.
 
 ## Configuración opcional (`.env`)
 
@@ -146,9 +201,11 @@ Copia `.env.example` a `.env` si quieres ajustar algo (todo tiene un valor por d
 cp .env.example .env
 ```
 
-- `OWNER_CHAT_ID` — tu chat (o un grupo) al que el bot avisa de eventos del sistema, por ejemplo "me reconecté tras estar caído". Déjalo vacío para desactivar ese aviso.
+- `OWNER_CHAT_ID` — tu chat (o un grupo) al que el bot avisa de eventos del sistema, por ejemplo "me reconecté tras estar caído". También es el único chat autorizado para crear/editar/borrar reuniones de padres por WhatsApp (`!reunion agregar/editar/borrar/listar`). Déjalo vacío para desactivar el aviso de sistema y esos subcomandos (el resto del bot sigue funcionando igual).
 - `BACKUP_KEEP` — cuántos backups diarios conservar (por defecto 7).
 - `DOWNTIME_ALERT_MIN` — minutos de desconexión seguidos a partir de los cuales avisa al reconectar (por defecto 5).
+- `ADMIN_USER` / `ADMIN_PASSWORD` / `ADMIN_SESSION_SECRET` — credenciales del panel de administrador. Sin las 3, el panel no arranca (ver sección de arriba).
+- `ADMIN_PORT` — puerto del panel de administrador (por defecto 4500).
 
 ## Backups automáticos
 
@@ -212,7 +269,10 @@ Los logs también quedan en `logs/out.log` y `logs/error.log`, y la sesión de W
 npm test
 ```
 
-Corre `scripts/test-manual.ts`: simula mensajes entrantes (`!listar`, `!hoy`, `!manana`, `!semana`, `!exportar`/`!importar`, pausar/reactivar/borrar, aislamiento entre chats, y el disparo del scheduler) sin necesitar una sesión real de WhatsApp. Limpia sus propios datos de prueba al terminar, así que es seguro correrlo contra tu base de datos real.
+Corre dos scripts encadenados, ambos seguros de correr contra tu base de datos real (limpian sus propios datos de prueba al terminar):
+
+- `scripts/test-manual.ts` — simula mensajes entrantes (`!listar`, `!hoy`, `!manana`, `!semana`, `!exportar`/`!importar`, pausar/reactivar/borrar, aislamiento entre chats, y el disparo del scheduler) sin necesitar una sesión real de WhatsApp.
+- `scripts/test-admin.ts` — CRUD de docentes/horarios/calendario cívico (usando un grado/sección "centinela" fuera de rango, 99/Z, que nunca choca con currículo real), más las rutas del panel de administrador probadas con `fetch` real contra un servidor de prueba.
 
 ## Siguientes pasos
 

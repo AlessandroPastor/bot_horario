@@ -47,14 +47,18 @@ function minutosHastaElEvento(evento: Evento, ahora: Date): number {
 
 function mensajeRecordatorio(evento: Evento, ahora: Date): string {
   const minutosReales = minutosHastaElEvento(evento, ahora);
+  // El aula/docente (clases) o el lugar (reuniones) vive en `descripcion` —
+  // sin esto, el aviso automático solo decía título+hora y había que
+  // escribir !listar a mano para ver dónde era.
+  const detalle = evento.descripcion ? `\n_${evento.descripcion}_` : "";
 
   if (minutosReales > 0) {
-    return `⏰ Recordatorio: *${evento.titulo}* empieza en ${formatearDuracion(minutosReales)} (${evento.hora}).`;
+    return `⏰ Recordatorio: *${evento.titulo}* empieza en ${formatearDuracion(minutosReales)} (${evento.hora}).${detalle}`;
   }
   if (minutosReales === 0) {
-    return `⏰ *${evento.titulo}* es ahora mismo (${evento.hora}).`;
+    return `⏰ *${evento.titulo}* es ahora mismo (${evento.hora}).${detalle}`;
   }
-  return `⏰ *${evento.titulo}* ya empezó hace ${formatearDuracion(-minutosReales)} (${evento.hora}).`;
+  return `⏰ *${evento.titulo}* ya empezó hace ${formatearDuracion(-minutosReales)} (${evento.hora}).${detalle}`;
 }
 
 export async function revisarEventos(): Promise<void> {

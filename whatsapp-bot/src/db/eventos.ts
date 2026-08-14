@@ -18,6 +18,8 @@ export interface Evento {
   activo: boolean;
   ultimoEnvio: string | null;
   createdAt: string;
+  /** Si este recordatorio vino de repartir (fan-out) una reunión de padres, su id. Null si no. */
+  reunionId: number | null;
 }
 
 interface EventoRow {
@@ -33,6 +35,7 @@ interface EventoRow {
   activo: number;
   ultimoEnvio: string | null;
   createdAt: string;
+  reunionId: number | null;
 }
 
 function rowToEvento(row: EventoRow): Evento {
@@ -52,12 +55,13 @@ export interface NuevoEvento {
   fecha?: string | null;
   hora: string;
   avisoPrevioMin?: number;
+  reunionId?: number | null;
 }
 
 export function crearEvento(input: NuevoEvento): Evento {
   const stmt = db.prepare(`
-    INSERT INTO eventos (titulo, descripcion, chatId, tipo, dias, fecha, hora, avisoPrevioMin)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO eventos (titulo, descripcion, chatId, tipo, dias, fecha, hora, avisoPrevioMin, reunionId)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     input.titulo,
@@ -68,6 +72,7 @@ export function crearEvento(input: NuevoEvento): Evento {
     input.fecha ?? null,
     input.hora,
     input.avisoPrevioMin ?? 0,
+    input.reunionId ?? null,
   );
   return obtenerEvento(Number(result.lastInsertRowid), input.chatId)!;
 }

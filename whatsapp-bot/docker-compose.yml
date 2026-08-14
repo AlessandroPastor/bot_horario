@@ -6,6 +6,12 @@ services:
     env_file:
       - path: ./.env
         required: false
+    ports:
+      # Panel de administrador — solo relevante si configuraste ADMIN_USER/
+      # ADMIN_PASSWORD/ADMIN_SESSION_SECRET en .env (si no, el panel no
+      # arranca y este puerto simplemente no responde). Pensado para red
+      # local: no lo expongas a Internet.
+      - "${ADMIN_PORT:-4500}:${ADMIN_PORT:-4500}"
     volumes:
       - ./auth_info:/app/auth_info
       - ./data:/app/data

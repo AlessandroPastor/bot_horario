@@ -1,7 +1,9 @@
 import type { proto } from "@whiskeysockets/baileys";
+import { iniciarAdminServer } from "./admin/server.js";
 import { crearBackup, iniciarBackupsAutomaticos } from "./backup/backup.js";
 import { startBot } from "./bot/connection.js";
 import { manejarMensaje } from "./commands/router.js";
+import { sembrarPlantillasPorDefecto } from "./db/seed.js";
 import { iniciarScheduler, setSocket } from "./scheduler/reminder.js";
 
 function getMessageText(msg: proto.IWebMessageInfo): string {
@@ -9,8 +11,10 @@ function getMessageText(msg: proto.IWebMessageInfo): string {
   return (m?.conversation ?? m?.extendedTextMessage?.text ?? "").trim();
 }
 
+sembrarPlantillasPorDefecto();
 iniciarScheduler();
 iniciarBackupsAutomaticos();
+iniciarAdminServer();
 
 startBot({
   onConnected: (sock) => {

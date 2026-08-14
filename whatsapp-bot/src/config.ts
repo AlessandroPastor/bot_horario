@@ -18,4 +18,11 @@ export const config = {
   backupKeep: numeroEnv("BACKUP_KEEP", 7),
   /** Minutos de desconexión a partir de los cuales se avisa al reconectar. */
   downtimeAlertMin: numeroEnv("DOWNTIME_ALERT_MIN", 5),
+
+  /** Panel de administrador (docentes/horarios/calendario). Sin estos 3 valores, el panel no arranca. */
+  adminUser: process.env.ADMIN_USER?.trim() || null,
+  adminPassword: process.env.ADMIN_PASSWORD || null,
+  adminSessionSecret: process.env.ADMIN_SESSION_SECRET || null,
+  /** Puerto del panel de administrador (solo importa si adminUser/adminPassword/adminSessionSecret están configurados). */
+  adminPort: numeroEnv("ADMIN_PORT", 4500),
 };

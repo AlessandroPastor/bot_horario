@@ -1,20 +1,23 @@
 import { db } from "./db.js";
 import { crearEvento, type DiaSemana } from "./eventos.js";
+import { obtenerDocente } from "./docentes.js";
+import { crearClasePlantilla, listarPlantilla } from "./plantillaHorario.js";
+import { crearFechaCivica, listarCalendarioCivico } from "./calendarioCivico.js";
 
-interface ClasePlantilla {
+interface ClasePlantillaBase {
   titulo: string;
   hora: string;
   dias: DiaSemana[];
 }
 
 /**
- * Horario semanal de ejemplo para un curso de secundaria en Perú, basado en
- * las áreas curriculares del Currículo Nacional de Educación Básica
+ * Contenido inicial (una sola vez, ver `sembrarPlantillasPorDefecto`) basado
+ * en las áreas curriculares del Currículo Nacional de Educación Básica
  * (Matemática, Comunicación, Inglés, Ciencia y Tecnología, etc.), con turno
- * mañana de 8:00 a 12:45 y periodos de 45 minutos. Se reutiliza para los 5
- * grados de secundaria, cada uno en su propia aula.
+ * mañana de 8:00 a 12:45 y periodos de 45 minutos. A partir de acá vive en
+ * la tabla `plantilla_horario` y es editable desde el panel de admin.
  */
-const PLANTILLA_HORARIO_SECUNDARIA: ClasePlantilla[] = [
+const PLANTILLA_HORARIO_SECUNDARIA: ClasePlantillaBase[] = [
   { titulo: "Matemática", hora: "08:00", dias: ["lun", "mie", "vie"] },
   { titulo: "Matemática", hora: "08:45", dias: ["mar", "jue"] },
   { titulo: "Comunicación", hora: "08:45", dias: ["lun", "vie"] },
@@ -45,19 +48,16 @@ const PLANTILLA_HORARIO_SECUNDARIA: ClasePlantilla[] = [
   { titulo: "Educación Religiosa", hora: "12:00", dias: ["jue"] },
 ];
 
-interface FechaCalendario {
+interface FechaCalendarioBase {
   titulo: string;
   fecha: string;
 }
 
 /**
- * Fechas cívicas y feriados oficiales del calendario peruano (2026),
- * limitado a las que caen después de la fecha en que se agrega este
- * módulo, para que aparezcan como próximas y no como eventos ya pasados.
- * Es igual para todos los grados: los eventos del colegio no dependen del
- * grado de cada alumno.
+ * Fechas cívicas y feriados oficiales del calendario peruano (2026), contenido
+ * inicial de `calendario_civico` (editable desde el panel a partir de acá).
  */
-const EVENTOS_CALENDARIO_PERU: FechaCalendario[] = [
+const EVENTOS_CALENDARIO_PERU: FechaCalendarioBase[] = [
   { titulo: "Santa Rosa de Lima (patrona del Perú y América)", fecha: "2026-08-30" },
   { titulo: "Día de la Primavera y la Juventud", fecha: "2026-09-23" },
   { titulo: "Combate de Angamos (Día de la Marina de Guerra del Perú)", fecha: "2026-10-08" },
@@ -71,6 +71,62 @@ const EVENTOS_CALENDARIO_PERU: FechaCalendario[] = [
   { titulo: "Navidad", fecha: "2026-12-25" },
 ];
 
+export const SECCIONES = ["A", "B", "C", "D", "E"] as const;
+export type Seccion = (typeof SECCIONES)[number];
+const GRADOS = [1, 2, 3, 4, 5] as const;
+
+/** Aula fija por combinación grado+sección (101-105, 201-205, ... 501-505), para tener "salones" distintos por sección. */
+export function aulaDe(grado: number, seccion: string): string {
+  const indice = SECCIONES.indexOf(seccion as Seccion) + 1;
+  return `${grado}0${indice}`;
+}
+
+function semillaEstado(): { horarioSembrado: boolean; calendarioSembrado: boolean } {
+  const row = db.prepare(`SELECT * FROM semilla_estado WHERE id = 1`).get() as {
+    horarioSembrado: number;
+    calendarioSembrado: number;
+  };
+  return {
+    horarioSembrado: row.horarioSembrado === 1,
+    calendarioSembrado: row.calendarioSembrado === 1,
+  };
+}
+
+/**
+ * Siembra el contenido inicial de `plantilla_horario` y `calendario_civico`
+ * UNA sola vez en la vida de la base (marcado en `semilla_estado`, no "si
+ * está vacía" — así no se re-siembra si el admin borra todo a propósito).
+ * Se llama al arrancar el proceso, antes de que el bot atienda mensajes.
+ */
+export function sembrarPlantillasPorDefecto(): void {
+  const estado = semillaEstado();
+
+  if (!estado.horarioSembrado) {
+    for (const grado of GRADOS) {
+      for (const seccion of SECCIONES) {
+        for (const clase of PLANTILLA_HORARIO_SECUNDARIA) {
+          crearClasePlantilla({
+            grado,
+            seccion,
+            titulo: clase.titulo,
+            hora: clase.hora,
+            dias: clase.dias,
+            avisoPrevioMin: 5,
+          });
+        }
+      }
+    }
+    db.prepare(`UPDATE semilla_estado SET horarioSembrado = 1 WHERE id = 1`).run();
+  }
+
+  if (!estado.calendarioSembrado) {
+    for (const evento of EVENTOS_CALENDARIO_PERU) {
+      crearFechaCivica({ titulo: evento.titulo, fecha: evento.fecha });
+    }
+    db.prepare(`UPDATE semilla_estado SET calendarioSembrado = 1 WHERE id = 1`).run();
+  }
+}
+
 function tieneCalendario(chatId: string): boolean {
   const row = db
     .prepare(`SELECT 1 FROM calendario_sembrado WHERE chatId = ?`)
@@ -78,11 +134,11 @@ function tieneCalendario(chatId: string): boolean {
   return row !== undefined;
 }
 
-/** Crea las fechas del calendario cívico para el chat, una sola vez (es igual para todos los grados). */
+/** Crea las fechas del calendario cívico para el chat, una sola vez (es igual para todos los grados/secciones). */
 export function sembrarCalendarioSiFalta(chatId: string): void {
   if (tieneCalendario(chatId)) return;
 
-  for (const evento of EVENTOS_CALENDARIO_PERU) {
+  for (const evento of listarCalendarioCivico()) {
     crearEvento({
       titulo: evento.titulo,
       chatId,
@@ -96,29 +152,23 @@ export function sembrarCalendarioSiFalta(chatId: string): void {
   db.prepare(`INSERT OR IGNORE INTO calendario_sembrado (chatId) VALUES (?)`).run(chatId);
 }
 
-export const SECCIONES = ["A", "B", "C", "D", "E"] as const;
-export type Seccion = (typeof SECCIONES)[number];
-
-/** Aula fija por combinación grado+sección (101-105, 201-205, ... 501-505), para tener "salones" distintos por sección. */
-export function aulaDe(grado: number, seccion: string): string {
-  const indice = SECCIONES.indexOf(seccion as Seccion) + 1;
-  return `${grado}0${indice}`;
-}
-
-/** Crea el horario de clases del grado y sección indicados (ej. 3°B) para el chat. Devuelve cuántos horarios creó. */
+/** Crea el horario de clases del grado y sección indicados (ej. 3°B) para el chat, leyendo la plantilla editable. Devuelve cuántos horarios creó. */
 export function sembrarHorarioSeccion(chatId: string, grado: number, seccion: string): number {
   const aula = aulaDe(grado, seccion);
   let creados = 0;
 
-  for (const clase of PLANTILLA_HORARIO_SECUNDARIA) {
+  for (const clase of listarPlantilla(grado, seccion)) {
+    const docente = clase.docenteId ? obtenerDocente(clase.docenteId) : null;
+    const descripcion = `${grado}°${seccion} de Secundaria — Aula ${aula}${docente ? ` — Prof. ${docente.nombre}` : ""}`;
+
     crearEvento({
       titulo: clase.titulo,
-      descripcion: `${grado}°${seccion} de Secundaria — Aula ${aula}`,
+      descripcion,
       chatId,
       tipo: "recurrente_semanal",
       dias: clase.dias,
       hora: clase.hora,
-      avisoPrevioMin: 5,
+      avisoPrevioMin: clase.avisoPrevioMin,
     });
     creados++;
   }
