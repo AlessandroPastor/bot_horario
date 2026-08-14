@@ -220,18 +220,51 @@ export interface ResultadoGeneracion {
 }
 
 /**
+ * Carga en `ocupadoDocente` los horarios que cada docente involucrado YA
+ * tiene comprometidos en OTROS grados (ya generados). Un docente puede
+ * dictar cursos en más de un grado, así que sin esto el generador de un
+ * grado no tendría forma de saber que ese profesor ya está ocupado a
+ * cierta hora por un curso de otro grado — lo pondría igual, chocando en la
+ * realidad aunque acá nunca se hubiera "visto" el choque.
+ */
+function precargarCompromisosDeOtrosGrados(
+  cursos: Curso[],
+  grado: number,
+  ocupadoDocente: Map<number, Set<string>>,
+): void {
+  const docenteIds = new Set(
+    cursos.map((c) => c.docenteId).filter((id): id is number => id !== null),
+  );
+  for (const docenteId of docenteIds) {
+    const filas = db
+      .prepare(`SELECT dias, hora FROM plantilla_horario WHERE docenteId = ? AND grado != ?`)
+      .all(docenteId, grado) as { dias: string; hora: string }[];
+    const ocupado = ocupadoDocente.get(docenteId) ?? new Set<string>();
+    for (const fila of filas) {
+      for (const dia of JSON.parse(fila.dias) as DiaSemana[]) {
+        ocupado.add(`${dia}-${fila.hora}`);
+      }
+    }
+    ocupadoDocente.set(docenteId, ocupado);
+  }
+}
+
+/**
  * Borra el horario actual de las 5 secciones de este grado y lo vuelve a
  * armar desde cero a partir del catálogo de `cursos` de ese grado, eligiendo
  * día(s) y hora al azar por sección. El mismo docente nunca queda en dos
- * secciones a la misma hora (dicta las 5, en horarios distintos). Si un
- * curso no cabe completo en alguna sección, esa sesión faltante se reporta
- * en `avisos` en vez de fallar silenciosamente o forzar un choque.
+ * secciones a la misma hora (dicta las 5, en horarios distintos) — ni
+ * tampoco en dos GRADOS distintos a la misma hora, si dicta cursos en más
+ * de uno (ver `precargarCompromisosDeOtrosGrados`). Si un curso no cabe
+ * completo en alguna sección, esa sesión faltante se reporta en `avisos` en
+ * vez de fallar silenciosamente o forzar un choque.
  */
 export function generarHorarioGrado(grado: number): ResultadoGeneracion {
   const cursos = listarCursos(grado);
   db.prepare(`DELETE FROM plantilla_horario WHERE grado = ?`).run(grado);
 
   const ocupadoDocente = new Map<number, Set<string>>();
+  precargarCompromisosDeOtrosGrados(cursos, grado, ocupadoDocente);
   const avisos: string[] = [];
 
   for (const seccion of SECCIONES_GENERADAS) {
@@ -240,7 +273,7 @@ export function generarHorarioGrado(grado: number): ResultadoGeneracion {
       const restantes = colocarCurso(curso, seccion, ocupadoSeccion, ocupadoDocente);
       if (restantes > 0) {
         avisos.push(
-          `"${curso.nombre}" en ${grado}°${seccion}: solo se ubicaron ${curso.vecesPorSemana - restantes} de ${curso.vecesPorSemana} veces por semana (sin cupo libre para el resto, por choque de horario o del mismo docente en otra sección).`,
+          `"${curso.nombre}" en ${grado}°${seccion}: solo se ubicaron ${curso.vecesPorSemana - restantes} de ${curso.vecesPorSemana} veces por semana (sin cupo libre para el resto, por choque de horario o porque el mismo docente ya está ocupado en otra sección o en otro grado).`,
         );
       }
     }

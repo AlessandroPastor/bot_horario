@@ -8,3 +8,7 @@ logs/
 backups/
 .env
 *.log
+
+# Paquetes de migración (scripts/exportar-para-otra-pc.ps1): contienen la
+# sesión de WhatsApp y el .env con contraseñas — nunca deben subirse a git.
+respaldo-completo_*.zip

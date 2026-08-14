@@ -19,7 +19,7 @@ import {
   estaConsultandoOtroSalon,
   iniciarConsultaOtroSalon,
 } from "./otroSalon.js";
-import { estaEsperandoPerfil, preguntarPerfil, responderPerfil, SALUDO } from "./perfil.js";
+import { estaEsperandoPerfil, preguntarPerfil, responderPerfil } from "./perfil.js";
 import {
   borrarReunionAdmin,
   continuarWizardReunion,
@@ -52,18 +52,27 @@ const AYUDA = [
   "Para ver el horario de otro salón (no el tuyo), di algo como \"el horario de otro salón\" o usa !otrosalon — te pregunto grado y sección y te lo muestro, sin tocar tu propio registro.",
 ].join("\n");
 
+// Este es el menú que ve cualquiera que escriba "hola" (o cualquier mensaje
+// casual que no matchee ningún comando/intención) — es solo una vista de lo
+// que se puede preguntar, no agrega comandos nuevos. "Horario de hoy" /
+// "Horario de mañana" / "Calendario cívico" / "Horario por aula" ya
+// funcionan en lenguaje natural (ver detectarIntencion/esConsultaOtroSalon);
+// !reunion y !ayuda siguen siendo comandos con "!", tal cual.
 const MENU_RAPIDO = [
-  SALUDO,
-  "Esto es lo que puedo hacer por ti:",
+  "👋 Estimado(a) usuario(a), le damos la bienvenida.",
   "",
-  '💬 "¿cuál es mi horario?" — tus clases de hoy',
-  '💬 "y de mañana?" — tus clases de mañana',
-  '💬 "¿qué eventos hay?" — el calendario cívico del colegio',
-  '💬 "el horario de otro salón" — ver el horario de otro grado/sección',
-  "👨‍👩‍👧 !reunion — próximas reuniones de padres",
-  "📋 !ayuda — ver todos los comandos",
+  "Soy *Ceneciano*, el asistente virtual del Colegio Nacional de Cabanillas.",
   "",
-  "Escríbeme cualquiera de esas opciones para empezar 😊",
+  "A continuación, le presento las opciones disponibles de consulta:",
+  "",
+  "📅 *Horario de hoy*: Muestra el horario de clases correspondiente al día actual.",
+  "📅 *Horario de mañana*: Muestra el horario de clases del día siguiente.",
+  "🗓️ *Calendario cívico*: Muestra los eventos y actividades institucionales programadas.",
+  "🏫 *Horario por aula*: Permite consultar la programación de otros grados y secciones.",
+  "👨‍👩‍👧 !reunion — Muestra el cronograma de próximas reuniones de padres de familia.",
+  "📋 !ayuda — Muestra el menú completo de comandos del sistema.",
+  "",
+  "Escriba o seleccione la opción de su preferencia para iniciar.",
 ].join("\n");
 
 function parseId(arg: string | undefined): number | null {

@@ -540,7 +540,7 @@ async function main() {
   // usuario sepa qué escribir.
   r = await last(demoChat, "hola, buenos días");
   assert(
-    r.includes("Ceneciano") && r.includes("mi horario") && r.includes("!ayuda"),
+    r.includes("Ceneciano") && r.includes("Horario de hoy") && r.includes("!ayuda"),
     "un mensaje casual muestra un menú rápido de opciones en vez de quedarse callado",
   );
 
@@ -608,7 +608,7 @@ async function main() {
   assert(r === "Listo, cancelé la consulta.", "cancelar a medio wizard lo aborta");
   r = await last(otroSalonChat, "3");
   assert(
-    !r.includes("Sección inválida") && r.includes("Escríbeme cualquiera"),
+    !r.includes("Sección inválida") && r.includes("opción de su preferencia"),
     "tras cancelar, el wizard ya no sigue activo (el '3' se procesa como mensaje normal, no como respuesta al wizard)",
   );
 

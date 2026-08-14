@@ -70,6 +70,64 @@ async function mostrarQR(qr: string, esElPrimero: boolean): Promise<void> {
 // mismo en cada reconexión, y necesitamos que sobreviva entre esas llamadas.
 let desconectadoDesde: number | null = null;
 
+// Referencias al socket/handlers "actuales", para poder desvincular desde
+// afuera (panel de administrador) sin tener que pasar el socket a mano por
+// todos lados. Se actualizan en cada startBot()/reconexión.
+let sockActual: WASocket | null = null;
+let handlersActuales: BotHandlers | null = null;
+let conectado = false;
+
+export function obtenerEstadoConexion(): { conectado: boolean } {
+  return { conectado };
+}
+
+/**
+ * Borra la sesión guardada (auth_info/ + el qr.png viejo, que ya no sirve)
+ * y arranca una reconexión desde cero — eso hace que Baileys pida un QR
+ * nuevo enseguida, sin tener que reiniciar el contenedor a mano.
+ */
+async function limpiarSesionYReconectar(): Promise<void> {
+  conectado = false;
+  fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+  fs.mkdirSync(AUTH_DIR, { recursive: true });
+  if (fs.existsSync(QR_PATH)) fs.rmSync(QR_PATH, { force: true });
+  if (handlersActuales) {
+    startBot(handlersActuales).catch((err) =>
+      console.error("Error al reconectar tras desvincular:", err),
+    );
+  }
+}
+
+/**
+ * Desvincula el número actual (llamado desde el panel de administrador).
+ * Intenta cerrar sesión "prolijo" con logout() — eso avisa a WhatsApp que el
+ * dispositivo se desvinculó de verdad, no solo que se cayó la conexión — y
+ * en cualquier caso (haya o no un socket activo, funcione o no logout())
+ * termina limpiando la sesión guardada y reconectando para mostrar un QR
+ * nuevo.
+ */
+export async function desvincularWhatsApp(): Promise<{ ok: boolean; mensaje: string }> {
+  if (sockActual) {
+    try {
+      await sockActual.logout();
+      // El evento connection.update (rama "sesión cerrada") ya se encarga de
+      // limpiar y reconectar apenas Baileys confirme el cierre — no hace
+      // falta duplicar el trabajo acá.
+      return {
+        ok: true,
+        mensaje: "Desvinculando... en unos segundos vas a ver un nuevo QR para escanear.",
+      };
+    } catch (err) {
+      console.error("No se pudo desvincular con logout(), se limpia la sesión a mano:", err);
+    }
+  }
+  await limpiarSesionYReconectar();
+  return {
+    ok: true,
+    mensaje: "Sesión de WhatsApp borrada. En unos segundos vas a ver un nuevo QR para escanear.",
+  };
+}
+
 export type MessageHandler = (
   sock: WASocket,
   msg: proto.IWebMessageInfo,
@@ -98,6 +156,7 @@ function avisarSiEstuvoCaido(sock: WASocket): void {
 }
 
 export async function startBot(handlers: BotHandlers): Promise<WASocket> {
+  handlersActuales = handlers;
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
 
@@ -106,6 +165,7 @@ export async function startBot(handlers: BotHandlers): Promise<WASocket> {
     auth: state,
     logger,
   });
+  sockActual = sock;
 
   let qrAbierto = false;
 
@@ -123,6 +183,7 @@ export async function startBot(handlers: BotHandlers): Promise<WASocket> {
     }
 
     if (connection === "close") {
+      conectado = false;
       if (desconectadoDesde === null) desconectadoDesde = Date.now();
 
       const statusCode = (lastDisconnect?.error as Boom | undefined)?.output
@@ -137,10 +198,14 @@ export async function startBot(handlers: BotHandlers): Promise<WASocket> {
         );
       } else {
         console.log(
-          "Sesión cerrada (logout). Borra la carpeta auth_info/ y vuelve a escanear el QR.",
+          "Sesión cerrada (logout). Borrando la sesión guardada y generando un nuevo QR...",
+        );
+        limpiarSesionYReconectar().catch((err) =>
+          console.error("Error limpiando la sesión tras el logout:", err),
         );
       }
     } else if (connection === "open") {
+      conectado = true;
       console.log("Bot conectado a WhatsApp ✅");
       avisarSiEstuvoCaido(sock);
       handlers.onConnected?.(sock);

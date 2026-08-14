@@ -3,8 +3,8 @@ export interface Docente {
   nombre: string;
   materia: string | null;
   contacto: string | null;
-  /** Grado que dicta (1-5). null solo en docentes creados antes de este campo. */
-  grado: number | null;
+  /** Grados que dicta (1-5 cada uno). Un docente puede dictar cursos en varios grados a la vez. */
+  grados: number[];
   createdAt: string;
 }
 

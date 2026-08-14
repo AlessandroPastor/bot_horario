@@ -14,15 +14,20 @@ function gradoValido(grado: unknown): grado is number {
   return typeof grado === "number" && Number.isInteger(grado) && grado >= 1 && grado <= 5;
 }
 
+function gradosValidos(grados: unknown): grados is number[] {
+  return Array.isArray(grados) && grados.length > 0 && grados.every(gradoValido);
+}
+
 function datosDocente(body: unknown): NuevoDocente | null {
-  const b = body as { nombre?: unknown; materia?: unknown; contacto?: unknown; grado?: unknown } | null;
+  const b = body as { nombre?: unknown; materia?: unknown; contacto?: unknown; grados?: unknown } | null;
   if (!b || typeof b.nombre !== "string" || !b.nombre.trim()) return null;
-  if (!gradoValido(b.grado)) return null;
+  if (!gradosValidos(b.grados)) return null;
   return {
     nombre: b.nombre.trim(),
     materia: typeof b.materia === "string" && b.materia.trim() ? b.materia.trim() : null,
     contacto: typeof b.contacto === "string" && b.contacto.trim() ? b.contacto.trim() : null,
-    grado: b.grado,
+    // sin duplicados, orden estable — no cambia el significado, solo se ve prolijo en la UI
+    grados: [...new Set(b.grados)].sort((a, b) => a - b),
   };
 }
 
@@ -43,7 +48,7 @@ docentesRouter.get("/:id", (req, res) => {
 docentesRouter.post("/", (req, res) => {
   const datos = datosDocente(req.body);
   if (!datos) {
-    res.status(400).json({ error: "El nombre es obligatorio, y el grado debe ser 1-5." });
+    res.status(400).json({ error: "El nombre es obligatorio, y debe elegir al menos un grado (1-5)." });
     return;
   }
   res.status(201).json(crearDocente(datos));
@@ -52,7 +57,7 @@ docentesRouter.post("/", (req, res) => {
 docentesRouter.put("/:id", (req, res) => {
   const datos = datosDocente(req.body);
   if (!datos) {
-    res.status(400).json({ error: "El nombre es obligatorio, y el grado debe ser 1-5." });
+    res.status(400).json({ error: "El nombre es obligatorio, y debe elegir al menos un grado (1-5)." });
     return;
   }
   const id = Number(req.params.id);

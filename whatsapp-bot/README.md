@@ -31,6 +31,27 @@ No hace falta instalar Node, correr `npm install` a mano, ni configurar PM2 — 
 
 > Si en esa PC vas a **programar/editar el bot** (no solo correrlo), usa el flujo con `npm run dev` de la siguiente sección en vez de Docker.
 
+### Mover el mismo colegio a otra PC (misma sesión, mismos datos)
+
+Lo de arriba deja el bot funcionando, pero con una sesión de WhatsApp **nueva** (hay que escanear el QR de nuevo) y una base de datos **vacía** (sin los docentes/cursos/horarios que ya cargaste). Si en cambio quieres mover exactamente el mismo colegio — misma sesión, mismos datos — a otra PC, hay dos scripts que hacen todo el trabajo:
+
+**En esta PC** (la que ya tiene todo configurado):
+```powershell
+.\scripts\exportar-para-otra-pc.ps1
+```
+Detiene el contenedor un momento (para copiar la base de datos sin riesgo), empaqueta la sesión de WhatsApp + la base de datos + el `.env` en un solo `respaldo-completo_AAAA-MM-DD_HH-mm-ss.zip`, y vuelve a levantar el contenedor.
+
+**En la PC nueva** (con Docker Desktop ya instalado):
+```powershell
+git clone https://github.com/AlessandroPastor/bot_horario.git
+# copia el .zip generado arriba dentro de bot_horario\whatsapp-bot\ (USB, red compartida, etc.)
+cd bot_horario\whatsapp-bot
+.\scripts\instalar-desde-paquete.ps1
+```
+Descomprime el paquete y levanta el contenedor. El bot reconecta solo con la sesión que trajiste (sin QR nuevo), y el panel (`http://localhost:4500`) ya tiene todo el currículo cargado.
+
+> El `.zip` que generan estos scripts contiene la sesión de WhatsApp y las contraseñas del panel — trátalo como algo sensible (no lo subas a ningún lado público) y bórralo cuando termines de moverlo.
+
 ## Instalación (desarrollo local, sin Docker)
 
 ```bash
@@ -91,21 +112,26 @@ Pausar, reactivar, borrar, exportar e importar sí siguen usando comandos con `!
 
 ## Cualquier mensaje que no reconozca muestra un menú rápido
 
-Si te escriben algo que no es ni un comando `!` ni una pregunta sobre horario/eventos (ej. "hola", "gracias", cualquier cosa suelta), Ceneciano ya no se queda callado — responde con un mini menú mostrando qué puede hacer:
+Si te escriben algo que no es ni un comando `!` ni una pregunta sobre horario/eventos (ej. "hola", "gracias", cualquier cosa suelta), Ceneciano ya no se queda callado — responde con un menú de bienvenida mostrando qué puede hacer:
 
 ```
-👋 ¡Hola! Soy Ceneciano, tu asistente del Colegio Nacional de Cabanillas (Puno).
-Esto es lo que puedo hacer por ti:
+👋 Estimado(a) usuario(a), le damos la bienvenida.
 
-💬 "¿cuál es mi horario?" — tus clases de hoy
-💬 "y de mañana?" — tus clases de mañana
-💬 "¿qué eventos hay?" — el calendario cívico del colegio
-📋 !ayuda — ver todos los comandos
+Soy Ceneciano, el asistente virtual del Colegio Nacional de Cabanillas.
 
-Escríbeme cualquiera de esas opciones para empezar 😊
+A continuación, le presento las opciones disponibles de consulta:
+
+📅 Horario de hoy: Muestra el horario de clases correspondiente al día actual.
+📅 Horario de mañana: Muestra el horario de clases del día siguiente.
+🗓️ Calendario cívico: Muestra los eventos y actividades institucionales programadas.
+🏫 Horario por aula: Permite consultar la programación de otros grados y secciones.
+👨‍👩‍👧 !reunion — Muestra el cronograma de próximas reuniones de padres de familia.
+📋 !ayuda — Muestra el menú completo de comandos del sistema.
+
+Escriba o seleccione la opción de su preferencia para iniciar.
 ```
 
-Así cualquiera que le escriba por primera vez (sin saber los comandos exactos) sabe de inmediato qué decirle.
+Es solo una vista de lo que ya se puede preguntar en lenguaje natural (nada de esto agrega comandos nuevos) — así cualquiera que le escriba por primera vez sabe de inmediato qué decirle.
 
 ## Fechas en español, con cuánto falta
 
@@ -147,7 +173,7 @@ Es solo un punto de partida para no arrancar en blanco — son horarios normales
 
 Para no tener que editar código cada vez que cambia algo, hay un panel web donde se administra:
 
-- **Docentes** — nombre, el grado que dicta (1°-5°, obligatorio) y materia/área y contacto opcionales, para vincular a cada curso/clase (aparece como "Matemática — Prof. Pérez" en los horarios que recibe cada alumno). El grado también sirve de filtro: al elegir el docente de un curso u horario, solo se muestran los de ese grado (útil apenas hay varias decenas de docentes).
+- **Docentes** — nombre, los grados que dicta (uno o varios, 1°-5°, al menos uno obligatorio) y materia/área y contacto opcionales, para vincular a cada curso/clase (aparece como "Matemática — Prof. Pérez" en los horarios que recibe cada alumno). Un mismo docente puede dictar cursos en más de un grado — marca todos los que le correspondan con los checkboxes. Esto también sirve de filtro: al elegir el docente de un curso u horario, solo se muestran los que dictan ese grado (útil apenas hay varias decenas de docentes).
 - **Cursos** — el catálogo de materias de cada grado (ver "Cursos por grado y generación automática de horario" más abajo): la forma recomendada de armar el horario.
 - **Horarios por grado y sección** — el currículo real, clase por clase: para cada combinación de grado (1°-5°) y sección (A-E), qué clases hay, a qué hora, qué días, con qué docente y cuántos minutos antes avisar. Se llena solo si generas el horario desde "Cursos", pero también se puede editar clase por clase a mano acá (por ejemplo para ajustar algo puntual después de generar). Como hay 25 combinaciones casi idénticas, también se puede **clonar** el horario de una sección a otra en un clic.
 - **Calendario cívico** — las fechas puntuales (feriados, aniversarios) que se le avisan a todo el mundo.
@@ -159,7 +185,7 @@ Para no tener que editar código cada vez que cambia algo, hay un panel web dond
 La forma recomendada de armar el horario no es escribir clase por clase — es en dos pasos:
 
 1. **Define los cursos de cada grado** (pestaña "Cursos"): elige el grado, y por cada materia indica su nombre, qué docente la dicta y cuántas veces por semana se dicta. **El mismo docente dicta esa materia en las 5 secciones (A-E)** de ese grado, cada una en un horario distinto — no hace falta (ni se puede) elegir un docente diferente por sección.
-2. Cuando termines de cargar los cursos de un grado, dale a **"Generar horario"**. El panel arma automáticamente el horario de las 5 secciones, eligiendo día(s) y hora al azar entre los bloques disponibles, cuidando dos cosas: dentro de una misma sección nunca hay dos clases a la vez, y el mismo docente nunca queda "en dos secciones a la misma hora" (como reparte su semana entre las 5, el generador evita que se crucen sus propios horarios).
+2. Cuando termines de cargar los cursos de un grado, dale a **"Generar horario"**. El panel arma automáticamente el horario de las 5 secciones, eligiendo día(s) y hora al azar entre los bloques disponibles, cuidando que el mismo docente nunca quede en dos horarios a la vez: ni "en dos secciones a la misma hora" dentro de este grado, ni en otro grado distinto que también dicte (el generador revisa lo que ese docente ya tiene comprometido en los demás grados antes de ubicarlo en este).
 
 Si algún curso pide más sesiones de las que caben sin cruzarse (por ejemplo, un docente con demasiadas materias/secciones a cargo), el panel te avisa exactamente cuáles no se pudieron ubicar completas, en vez de forzar un cruce o fallar en silencio — puedes ajustar la carga (menos veces por semana, otro docente) y volver a generar.
 
@@ -178,6 +204,16 @@ ADMIN_SESSION_SECRET=cualquier_texto_largo_y_random
 Sin esas 3, el bot de WhatsApp funciona exactamente igual — solo el panel queda apagado (verás una advertencia en los logs recordándotelo). Con ellas configuradas y el bot corriendo (con o sin Docker), entra desde el navegador a `http://localhost:4500` (o la IP de esa PC en tu red si entras desde otro dispositivo) e inicia sesión con ese usuario/contraseña.
 
 > Pensado **solo para tu red local** — no hay HTTPS ni multiusuario. No expongas ese puerto a Internet (si usas Docker, revisa `docker-compose.yml`: el puerto se expone en todas las interfaces por defecto).
+
+### Desvincular WhatsApp desde el panel
+
+En el Dashboard hay una tarjeta "Conexión de WhatsApp" con el estado actual (Conectado/Desconectado) y un botón **Desvincular** (pide confirmación antes de actuar, porque corta el servicio hasta volver a escanear). Al desvincular:
+
+1. Se cierra la sesión de WhatsApp de verdad (no solo se corta la conexión — WhatsApp también se entera de que el dispositivo se desvinculó).
+2. Se borra automáticamente la sesión guardada (`auth_info/`) y el QR viejo.
+3. El bot arranca una reconexión sola y genera un QR nuevo — sin que tengas que reiniciar el contenedor ni tocar carpetas a mano.
+
+Mientras está desconectado, el mismo QR aparece directo en esa tarjeta del panel (se refresca solo cada pocos segundos), además de en la terminal y en `data/qr.png` como siempre. Sirve tanto para cambiar el bot a otro número de WhatsApp como para simplemente empezar de cero si algo quedó en mal estado.
 
 ## Reuniones de padres de familia
 

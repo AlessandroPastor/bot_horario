@@ -148,12 +148,22 @@ try {
 }
 
 try {
-  // Grado que dicta el docente (1-5), para poder filtrar el selector de
-  // docentes al armar un curso de un grado específico. Nullable a propósito
-  // (columna agregada después, docentes ya creados antes de esto quedan en
-  // null hasta que se les asigne uno) — la validación de "obligatorio 1-5
-  // para docentes nuevos" vive en la capa de rutas de la API.
+  // Grado que dicta el docente (1-5) — histórico, reemplazado por `grados`
+  // (ver abajo) porque un docente puede dictar cursos en varios grados a la
+  // vez, no solo uno. Se deja la columna vieja sin usar (aditivo, nunca se
+  // borran columnas) en vez de migrarla con ALTER TABLE ... DROP COLUMN.
   db.exec(`ALTER TABLE docentes ADD COLUMN grado INTEGER`);
+} catch {
+  // la columna ya existe, no hay nada que hacer
+}
+
+try {
+  // Lista de grados que dicta el docente, en JSON (ej. "[1,3,5]") — mismo
+  // patrón que `eventos.dias`/`plantilla_horario.dias`. Default '[]' para
+  // que una base ya existente no rompa al leer antes del backfill. La
+  // validación de "al menos un grado, cada uno 1-5" vive en la ruta de la
+  // API; acá no hay CHECK a propósito, igual que el resto de las tablas.
+  db.exec(`ALTER TABLE docentes ADD COLUMN grados TEXT NOT NULL DEFAULT '[]'`);
 } catch {
   // la columna ya existe, no hay nada que hacer
 }

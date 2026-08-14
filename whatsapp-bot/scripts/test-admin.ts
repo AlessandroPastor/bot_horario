@@ -128,35 +128,41 @@ function assert(cond: boolean, msg: string) {
 }
 
 async function probarCapaDB() {
-  // --- docentes CRUD ---
+  // --- docentes CRUD, con varios grados a la vez (un docente puede dictar
+  // cursos en más de un grado) ---
   const docente = crearDocente({
     nombre: "Prof. De Prueba",
     materia: "Prueba",
     contacto: "999999999",
-    grado: GRADO_PRUEBA,
+    grados: [GRADO_PRUEBA, GRADO_PRUEBA + 1],
   });
   idsDocentes.push(docente.id);
-  assert(docente.nombre === "Prof. De Prueba" && docente.grado === GRADO_PRUEBA, "crearDocente guarda el nombre y el grado");
+  assert(
+    docente.nombre === "Prof. De Prueba" && JSON.stringify(docente.grados) === JSON.stringify([GRADO_PRUEBA, GRADO_PRUEBA + 1]),
+    "crearDocente guarda el nombre y la lista de grados",
+  );
   assert(
     listarDocentes().some((d) => d.id === docente.id),
     "listarDocentes incluye el docente recién creado",
   );
   assert(
     listarDocentes(GRADO_PRUEBA).some((d) => d.id === docente.id) &&
-      !listarDocentes(GRADO_PRUEBA + 1).some((d) => d.id === docente.id),
-    "listarDocentes(grado) filtra por grado",
+      listarDocentes(GRADO_PRUEBA + 1).some((d) => d.id === docente.id) &&
+      !listarDocentes(GRADO_PRUEBA + 2).some((d) => d.id === docente.id),
+    "listarDocentes(grado) incluye al docente en CADA uno de sus grados, y en ninguno más",
   );
 
   assert(
-    actualizarDocente(docente.id, { nombre: "Prof. Actualizado", materia: null, contacto: null, grado: GRADO_PRUEBA + 1 }),
+    actualizarDocente(docente.id, { nombre: "Prof. Actualizado", materia: null, contacto: null, grados: [GRADO_PRUEBA + 1] }),
     "actualizarDocente devuelve true al encontrar el docente",
   );
   assert(
-    obtenerDocente(docente.id)?.nombre === "Prof. Actualizado" && obtenerDocente(docente.id)?.grado === GRADO_PRUEBA + 1,
-    "actualizarDocente cambia los datos (incluido el grado) de verdad",
+    obtenerDocente(docente.id)?.nombre === "Prof. Actualizado" &&
+      JSON.stringify(obtenerDocente(docente.id)?.grados) === JSON.stringify([GRADO_PRUEBA + 1]),
+    "actualizarDocente cambia los datos (incluidos los grados) de verdad",
   );
   assert(
-    !actualizarDocente(999_999, { nombre: "x", materia: null, contacto: null, grado: GRADO_PRUEBA }),
+    !actualizarDocente(999_999, { nombre: "x", materia: null, contacto: null, grados: [GRADO_PRUEBA] }),
     "actualizarDocente devuelve false si el id no existe",
   );
 
@@ -263,7 +269,7 @@ async function probarCapaDB() {
 
 async function probarCursosYGenerador() {
   // --- cursos CRUD (combo centinela grado 99) ---
-  const docenteCurso = crearDocente({ nombre: "Prof. Cursos Prueba" });
+  const docenteCurso = crearDocente({ nombre: "Prof. Cursos Prueba", grados: [GRADO_PRUEBA] });
   idsDocentes.push(docenteCurso.id);
 
   const curso = crearCurso({
@@ -311,7 +317,7 @@ async function probarCursosYGenerador() {
   // Nunca se llama con un grado real (1-5): DELETE FROM plantilla_horario
   // WHERE grado=? es destructivo, y un grado real ya tiene el currículo de
   // producción. El combo centinela 99 es el único seguro para esto.
-  const docenteGen = crearDocente({ nombre: "Prof. Generador Prueba" });
+  const docenteGen = crearDocente({ nombre: "Prof. Generador Prueba", grados: [GRADO_PRUEBA] });
   idsDocentes.push(docenteGen.id);
   const cursoA = crearCurso({ grado: GRADO_PRUEBA, nombre: "Curso A", docenteId: docenteGen.id, vecesPorSemana: 3 });
   const cursoB = crearCurso({ grado: GRADO_PRUEBA, nombre: "Curso B", docenteId: docenteGen.id, vecesPorSemana: 2 });
@@ -376,7 +382,7 @@ async function probarCursosYGenerador() {
   for (const c of listarCursos(GRADO_PRUEBA)) eliminarCurso(c.id);
   idsCursos.length = 0;
 
-  const docenteSobrecargado = crearDocente({ nombre: "Prof. Sobrecargado Prueba" });
+  const docenteSobrecargado = crearDocente({ nombre: "Prof. Sobrecargado Prueba", grados: [GRADO_PRUEBA] });
   idsDocentes.push(docenteSobrecargado.id);
   for (let i = 1; i <= 7; i++) {
     const c = crearCurso({
@@ -413,6 +419,81 @@ async function probarCursosYGenerador() {
     choquesEstres === 0,
     "incluso sobrecargado al límite, el generador nunca produce un choque de docente entre secciones",
   );
+
+  // --- generarHorarioGrado: un docente que dicta en DOS grados distintos
+  // nunca queda con un choque de horario ENTRE esos grados (antes de este
+  // caso ni siquiera era posible: un docente dictaba un solo grado) ---
+  db.prepare(`DELETE FROM plantilla_horario WHERE grado = ?`).run(GRADO_PRUEBA);
+  for (const c of listarCursos(GRADO_PRUEBA)) eliminarCurso(c.id);
+  idsCursos.length = 0;
+
+  const GRADO_PRUEBA_2 = GRADO_PRUEBA + 1; // 100: otro combo centinela, distinto de 99
+  const docenteMultiGrado = crearDocente({
+    nombre: "Prof. Multi-Grado Prueba",
+    grados: [GRADO_PRUEBA, GRADO_PRUEBA_2],
+  });
+  idsDocentes.push(docenteMultiGrado.id);
+  const cursoGradoA = crearCurso({
+    grado: GRADO_PRUEBA,
+    nombre: "Curso Multi-Grado A",
+    docenteId: docenteMultiGrado.id,
+    vecesPorSemana: 3,
+  });
+  const cursoGradoB = crearCurso({
+    grado: GRADO_PRUEBA_2,
+    nombre: "Curso Multi-Grado B",
+    docenteId: docenteMultiGrado.id,
+    vecesPorSemana: 3,
+  });
+  idsCursos.push(cursoGradoA.id, cursoGradoB.id);
+
+  generarHorarioGrado(GRADO_PRUEBA);
+  generarHorarioGrado(GRADO_PRUEBA_2);
+
+  const filasMultiA = listarPlantilla(GRADO_PRUEBA);
+  const filasMultiB = listarPlantilla(GRADO_PRUEBA_2);
+  for (const f of [...filasMultiA, ...filasMultiB]) idsClases.push(f.id);
+
+  const ocupadoPorGrado = new Map<string, string>(); // "dia-hora" -> "grado°seccion" que lo usa
+  let choquesEntreGrados = 0;
+  for (const f of [...filasMultiA, ...filasMultiB]) {
+    if (f.docenteId !== docenteMultiGrado.id) continue;
+    for (const dia of f.dias) {
+      const key = `${dia}-${f.hora}`;
+      const marca = `${f.grado}°${f.seccion}`;
+      if (ocupadoPorGrado.has(key) && ocupadoPorGrado.get(key) !== marca) choquesEntreGrados++;
+      ocupadoPorGrado.set(key, marca);
+    }
+  }
+  assert(
+    choquesEntreGrados === 0,
+    "un docente que dicta en dos grados distintos nunca queda con un choque de horario entre esos grados",
+  );
+
+  // regenerar el primer grado de nuevo: sigue respetando lo que el mismo
+  // docente ya tiene comprometido en el segundo grado (que no se tocó)
+  generarHorarioGrado(GRADO_PRUEBA);
+  const filasMultiARegenerado = listarPlantilla(GRADO_PRUEBA);
+  const filasMultiBIntacto = listarPlantilla(GRADO_PRUEBA_2);
+  for (const f of filasMultiARegenerado) idsClases.push(f.id);
+
+  const ocupadoTrasRegenerar = new Map<string, string>();
+  let choquesTrasRegenerar = 0;
+  for (const f of [...filasMultiARegenerado, ...filasMultiBIntacto]) {
+    if (f.docenteId !== docenteMultiGrado.id) continue;
+    for (const dia of f.dias) {
+      const key = `${dia}-${f.hora}`;
+      const marca = `${f.grado}°${f.seccion}`;
+      if (ocupadoTrasRegenerar.has(key) && ocupadoTrasRegenerar.get(key) !== marca) choquesTrasRegenerar++;
+      ocupadoTrasRegenerar.set(key, marca);
+    }
+  }
+  assert(
+    choquesTrasRegenerar === 0,
+    "regenerar un grado sigue respetando los compromisos vigentes del mismo docente en el otro grado",
+  );
+
+  db.prepare(`DELETE FROM plantilla_horario WHERE grado = ?`).run(GRADO_PRUEBA_2);
 }
 
 async function probarReunionesDB() {
@@ -681,25 +762,40 @@ async function probarRutasExpress() {
       headers,
       body: JSON.stringify({ nombre: "No debería crearse", materia: "Prueba" }),
     });
-    assert(docenteSinGradoResp.status === 400, "POST /api/docentes rechaza si falta el grado");
+    assert(docenteSinGradoResp.status === 400, "POST /api/docentes rechaza si falta 'grados'");
+
+    const docenteGradosVacioResp = await fetch(`${base}/api/docentes`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ nombre: "No debería crearse", grados: [] }),
+    });
+    assert(docenteGradosVacioResp.status === 400, "POST /api/docentes rechaza grados: [] (ningún grado elegido)");
 
     const docenteGradoInvalidoResp = await fetch(`${base}/api/docentes`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ nombre: "No debería crearse", grado: GRADO_PRUEBA }),
+      body: JSON.stringify({ nombre: "No debería crearse", grados: [GRADO_PRUEBA] }),
     });
     assert(docenteGradoInvalidoResp.status === 400, "POST /api/docentes rechaza un grado fuera de rango (1-5)");
 
-    const GRADO_HTTP_DOCENTE = 4;
+    const GRADO_HTTP_DOCENTE_1 = 4;
+    const GRADO_HTTP_DOCENTE_2 = 2;
     const crearResp = await fetch(`${base}/api/docentes`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ nombre: "Prof. HTTP", materia: "Prueba", grado: GRADO_HTTP_DOCENTE }),
+      body: JSON.stringify({
+        nombre: "Prof. HTTP",
+        materia: "Prueba",
+        grados: [GRADO_HTTP_DOCENTE_1, GRADO_HTTP_DOCENTE_2],
+      }),
     });
-    assert(crearResp.status === 201, "POST /api/docentes crea un docente con grado válido");
-    const docenteCreado = (await crearResp.json()) as { id: number; grado: number };
+    assert(crearResp.status === 201, "POST /api/docentes crea un docente con grados válidos");
+    const docenteCreado = (await crearResp.json()) as { id: number; grados: number[] };
     idsDocentes.push(docenteCreado.id);
-    assert(docenteCreado.grado === GRADO_HTTP_DOCENTE, "el docente creado guarda el grado enviado");
+    assert(
+      JSON.stringify(docenteCreado.grados) === JSON.stringify([GRADO_HTTP_DOCENTE_2, GRADO_HTTP_DOCENTE_1].sort((a, b) => a - b)),
+      "el docente creado guarda los grados enviados (ordenados, sin duplicados)",
+    );
 
     const listarResp = await fetch(`${base}/api/docentes`, { headers });
     const docentesListados = (await listarResp.json()) as { id: number }[];
@@ -708,17 +804,23 @@ async function probarRutasExpress() {
       "GET /api/docentes lista el docente recién creado",
     );
 
-    const listarPorGradoResp = await fetch(`${base}/api/docentes?grado=${GRADO_HTTP_DOCENTE}`, { headers });
+    const listarPorGradoResp = await fetch(`${base}/api/docentes?grado=${GRADO_HTTP_DOCENTE_1}`, { headers });
     const docentesPorGrado = (await listarPorGradoResp.json()) as { id: number }[];
     assert(
       docentesPorGrado.some((d) => d.id === docenteCreado.id),
-      "GET /api/docentes?grado= incluye el docente de ese grado",
+      "GET /api/docentes?grado= incluye al docente en CADA uno de sus grados",
     );
-    const listarOtroGradoResp = await fetch(`${base}/api/docentes?grado=${GRADO_HTTP_DOCENTE === 5 ? 1 : GRADO_HTTP_DOCENTE + 1}`, { headers });
+    const listarPorGrado2Resp = await fetch(`${base}/api/docentes?grado=${GRADO_HTTP_DOCENTE_2}`, { headers });
+    const docentesPorGrado2 = (await listarPorGrado2Resp.json()) as { id: number }[];
+    assert(
+      docentesPorGrado2.some((d) => d.id === docenteCreado.id),
+      "GET /api/docentes?grado= también lo incluye en su segundo grado",
+    );
+    const listarOtroGradoResp = await fetch(`${base}/api/docentes?grado=1`, { headers });
     const docentesOtroGrado = (await listarOtroGradoResp.json()) as { id: number }[];
     assert(
       !docentesOtroGrado.some((d) => d.id === docenteCreado.id),
-      "GET /api/docentes?grado= no incluye docentes de otro grado",
+      "GET /api/docentes?grado= no incluye docentes que no dictan ese grado",
     );
 
     const eliminarResp = await fetch(`${base}/api/docentes/${docenteCreado.id}`, {
@@ -930,6 +1032,25 @@ async function probarRutasExpress() {
         typeof resumen.chatsRegistrados === "number" &&
         typeof resumen.reuniones === "number",
       "GET /api/resumen devuelve los conteos esperados para el dashboard, incluyendo reuniones",
+    );
+
+    // GET /api/whatsapp/estado y /qr: de solo lectura, seguros de probar tal
+    // cual. POST /api/whatsapp/desvincular NO se prueba acá a propósito —
+    // incluso en el caso "sin conexión activa" termina borrando la carpeta
+    // auth_info/ real (ver src/bot/connection.ts), y este script corre
+    // contra la base/carpetas reales del proyecto. Probarlo de verdad
+    // requeriría un socket de WhatsApp real, fuera del alcance de estas
+    // pruebas automatizadas.
+    const estadoWaResp = await fetch(`${base}/api/whatsapp/estado`, { headers });
+    const estadoWa = (await estadoWaResp.json()) as { conectado: boolean; tieneQR: boolean };
+    assert(
+      estadoWaResp.status === 200 && typeof estadoWa.conectado === "boolean" && typeof estadoWa.tieneQR === "boolean",
+      "GET /api/whatsapp/estado devuelve conectado/tieneQR",
+    );
+    const qrWaResp = await fetch(`${base}/api/whatsapp/qr`, { headers });
+    assert(
+      qrWaResp.status === 200 || qrWaResp.status === 404,
+      "GET /api/whatsapp/qr responde 200 (si hay QR guardado) o 404 (si no hay)",
     );
 
     // logout invalida la sesión

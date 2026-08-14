@@ -5,7 +5,7 @@ export interface DatosDocente {
   nombre: string;
   materia?: string | null;
   contacto?: string | null;
-  grado: number | null;
+  grados: number[];
 }
 
 export const docentesApi = {

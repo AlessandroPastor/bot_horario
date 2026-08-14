@@ -1,5 +1,17 @@
 import { useState } from "react";
-import { ActionIcon, Button, Group, Modal, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
+import {
+  ActionIcon,
+  Button,
+  Checkbox,
+  Group,
+  Modal,
+  Select,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+  Title,
+} from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,10 +23,14 @@ interface ValoresFormulario {
   nombre: string;
   materia: string;
   contacto: string;
-  grado: string; // valor del Select, se convierte a número al guardar
+  grados: string[]; // valores del Checkbox.Group, se convierten a number[] al guardar
 }
 
-const VALORES_INICIALES: ValoresFormulario = { nombre: "", materia: "", contacto: "", grado: "" };
+const VALORES_INICIALES: ValoresFormulario = { nombre: "", materia: "", contacto: "", grados: [] };
+
+function gradosLegibles(grados: number[]): string {
+  return grados.length > 0 ? grados.map((g) => `${g}°`).join(", ") : "— (sin asignar)";
+}
 
 export function DocentesPage() {
   const qc = useQueryClient();
@@ -30,7 +46,7 @@ export function DocentesPage() {
     initialValues: VALORES_INICIALES,
     validate: {
       nombre: (v) => (v.trim() ? null : "Obligatorio"),
-      grado: (v) => (v ? null : "Elige el grado que dicta"),
+      grados: (v) => (v.length > 0 ? null : "Elige al menos un grado"),
     },
   });
 
@@ -78,7 +94,7 @@ export function DocentesPage() {
       nombre: docente.nombre,
       materia: docente.materia ?? "",
       contacto: docente.contacto ?? "",
-      grado: docente.grado ? String(docente.grado) : "",
+      grados: docente.grados.map(String),
     });
     setModalAbierto(true);
   }
@@ -93,7 +109,7 @@ export function DocentesPage() {
       nombre: valores.nombre.trim(),
       materia: valores.materia.trim() || null,
       contacto: valores.contacto.trim() || null,
-      grado: Number(valores.grado),
+      grados: valores.grados.map(Number),
     };
     if (editando) actualizar.mutate({ id: editando.id, datos });
     else crear.mutate(datos);
@@ -107,6 +123,10 @@ export function DocentesPage() {
           Nuevo docente
         </Button>
       </Group>
+
+      <Text c="dimmed" size="sm" mb="md">
+        Un docente puede dictar cursos en más de un grado — marca todos los que le correspondan.
+      </Text>
 
       <Group mb="md">
         <Select
@@ -124,7 +144,7 @@ export function DocentesPage() {
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Nombre</Table.Th>
-            <Table.Th>Grado</Table.Th>
+            <Table.Th>Grados</Table.Th>
             <Table.Th>Materia</Table.Th>
             <Table.Th>Contacto</Table.Th>
             <Table.Th w={100} />
@@ -134,7 +154,7 @@ export function DocentesPage() {
           {docentes?.map((d) => (
             <Table.Tr key={d.id}>
               <Table.Td>{d.nombre}</Table.Td>
-              <Table.Td>{d.grado ? `${d.grado}°` : "— (sin asignar)"}</Table.Td>
+              <Table.Td>{gradosLegibles(d.grados)}</Table.Td>
               <Table.Td>{d.materia ?? "—"}</Table.Td>
               <Table.Td>{d.contacto ?? "—"}</Table.Td>
               <Table.Td>
@@ -153,7 +173,7 @@ export function DocentesPage() {
       </Table>
       {!isLoading && docentes?.length === 0 && (
         <Text c="dimmed" ta="center" mt="lg">
-          {filtroGrado ? `Ningún docente asignado a ${filtroGrado}°.` : "Todavía no hay docentes registrados."}
+          {filtroGrado ? `Ningún docente dicta en ${filtroGrado}°.` : "Todavía no hay docentes registrados."}
         </Text>
       )}
 
@@ -161,14 +181,17 @@ export function DocentesPage() {
         <form onSubmit={form.onSubmit(guardar)}>
           <Stack>
             <TextInput label="Nombre" required {...form.getInputProps("nombre")} />
-            <Select
-              label="Grado que dicta"
-              required
-              placeholder="Elige un grado"
-              data={GRADOS.map((g) => ({ value: String(g), label: `${g}°` }))}
-              allowDeselect={false}
-              {...form.getInputProps("grado")}
-            />
+            <Checkbox.Group
+              label="Grados que dicta"
+              description="Puede marcar más de uno"
+              {...form.getInputProps("grados")}
+            >
+              <Group mt="xs">
+                {GRADOS.map((g) => (
+                  <Checkbox key={g} value={String(g)} label={`${g}°`} />
+                ))}
+              </Group>
+            </Checkbox.Group>
             <TextInput label="Materia / área" {...form.getInputProps("materia")} />
             <TextInput label="Contacto (opcional)" {...form.getInputProps("contacto")} />
             <Button type="submit" loading={crear.isPending || actualizar.isPending}>

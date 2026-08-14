@@ -10,6 +10,7 @@ import { docentesRouter } from "./routes/docentes.js";
 import { plantillaHorarioRouter } from "./routes/plantillaHorario.js";
 import { resumenRouter } from "./routes/resumen.js";
 import { reunionesRouter } from "./routes/reuniones.js";
+import { whatsappRouter } from "./routes/whatsapp.js";
 
 // Los estáticos del SPA (admin-panel/) se copian acá al buildear (ver
 // Dockerfile). En desarrollo, si no existe, el panel corre aparte con
@@ -43,6 +44,7 @@ export function crearAdminApp(): Express {
   app.use("/api/calendario-civico", requireAuth, calendarioCivicoRouter);
   app.use("/api/reuniones", requireAuth, reunionesRouter);
   app.use("/api/resumen", requireAuth, resumenRouter);
+  app.use("/api/whatsapp", requireAuth, whatsappRouter);
 
   if (fs.existsSync(ADMIN_STATIC_DIR)) {
     app.use(express.static(ADMIN_STATIC_DIR));
