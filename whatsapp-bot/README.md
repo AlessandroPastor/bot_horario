@@ -31,9 +31,14 @@ No hace falta instalar Node, correr `npm install` a mano, ni configurar PM2 — 
 
 > Si en esa PC vas a **programar/editar el bot** (no solo correrlo), usa el flujo con `npm run dev` de la siguiente sección en vez de Docker.
 
-### Mover el mismo colegio a otra PC (misma sesión, mismos datos)
+### (Opcional) Mover el mismo colegio a otra PC, con la misma sesión y los mismos datos
 
-Lo de arriba deja el bot funcionando, pero con una sesión de WhatsApp **nueva** (hay que escanear el QR de nuevo) y una base de datos **vacía** (sin los docentes/cursos/horarios que ya cargaste). Si en cambio quieres mover exactamente el mismo colegio — misma sesión, mismos datos — a otra PC, hay dos scripts que hacen todo el trabajo:
+Esto es **completamente opcional** — el `docker compose up` de arriba ya deja el bot funcionando en la PC nueva por sí solo. La diferencia es con qué datos arranca:
+
+- **Sin este paso** (lo de arriba, nada más): sesión de WhatsApp **nueva** (hay que escanear un QR) y base de datos **vacía** (sin los docentes/cursos/horarios que ya cargaste — hay que armarlos de nuevo desde el panel).
+- **Con este paso**: se lleva la sesión y la base de datos **tal cual están en esta PC** — no hace falta escanear QR ni volver a cargar el currículo.
+
+Úsalo solo si quieres mover exactamente el mismo colegio (misma sesión de WhatsApp, mismos docentes/cursos/horarios ya cargados) de una PC a otra. Si vas a instalar un colegio nuevo desde cero, sáltate esta parte. Hay dos scripts que hacen todo el trabajo:
 
 **En esta PC** (la que ya tiene todo configurado):
 ```powershell
